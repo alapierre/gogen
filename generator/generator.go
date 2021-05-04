@@ -3,10 +3,24 @@ package generator
 import (
 	"fmt"
 	"github.com/dave/jennifer/jen"
+	"io"
 	"net/url"
 	"os"
 	"path"
+	"text/template"
 )
+
+type Project struct {
+	Module       string
+	OriginalName string
+	Name         string
+	Docker       *Docker
+}
+
+type Docker struct {
+	Maintainer string
+	Expose     string
+}
 
 func MakeProjectFolder(modPath string) error {
 
@@ -68,4 +82,49 @@ func GenMain(projectName string) error {
 		return fmt.Errorf("can't save main.go %v", err)
 	}
 	return nil
+}
+
+func FileGenerator(project Project, tplContent *string, writer io.Writer) error {
+
+	tmpl, err := template.New("docker").Parse(*tplContent)
+
+	if err != nil {
+		return fmt.Errorf("can't parse template %v", err)
+	}
+
+	err = tmpl.Execute(writer, project)
+
+	if err != nil {
+		return fmt.Errorf("can't execute template %v", err)
+	}
+	return nil
+}
+
+func copyFile(src, dst string) (int64, error) {
+	sourceFileStat, err := os.Stat(src)
+	if err != nil {
+		return 0, err
+	}
+
+	if !sourceFileStat.Mode().IsRegular() {
+		return 0, fmt.Errorf("%s is not a regular file", src)
+	}
+
+	source, err := os.Open(src)
+	if err != nil {
+		return 0, err
+	}
+
+	//goland:noinspection ALL
+	defer source.Close()
+
+	destination, err := os.Create(dst)
+	if err != nil {
+		return 0, err
+	}
+
+	//goland:noinspection ALL
+	defer destination.Close()
+	nBytes, err := io.Copy(destination, source)
+	return nBytes, err
 }
